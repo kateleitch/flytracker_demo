@@ -19,12 +19,12 @@ class BlobFinder:
     def find(self, image, fg_mask):
 
         dummy, contour_list, dummy = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        #contour_list, dummy = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
         fg_mask_copy = np.array(fg_mask)
 
         if self.open_kernel_size[0]*self.open_kernel_size[1] > 0: 
 
-            
             if self.kernel_shape == 'rect':
                 open_kernel = np.ones(self.open_kernel_size, np.uint8)
                 close_kernel = np.ones(self.close_kernel_size, np.uint8)

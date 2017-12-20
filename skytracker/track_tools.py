@@ -27,6 +27,7 @@ class BlobMatcher:
 
         for curr_item, next_item in zip(blob_data[0:-1],blob_data[1:]):
 
+            #print (curr_item) #troubleshooting
             curr_frame = curr_item['frame']
             next_frame = next_item['frame']
             next_blob_list = next_item['blobs']
@@ -54,7 +55,7 @@ class BlobMatcher:
                     if distance <= self.param['max_dist']:
                         blob_pair_list.append(blob_pair)
                         # Remove 2nd blob - which was matched to 1st - from list of candidates
-                        candidate_pair_list = [item for item in candidate_pair_list if item[1][1] != blob_pair[1]] 
+                        candidate_pair_list = [item for item in candidate_pair_list if item[1][1] != blob_pair[1]]
                     # Remove 1st blob from list of candidates
                     candidate_pair_list = [item for item in candidate_pair_list if item[1][0] != blob_pair[0]]
                     num_to_check -= 1
@@ -64,7 +65,7 @@ class BlobMatcher:
 
         return match_list
 
-                
+
 class BlobStitcher:
     """
     Stitches together pairwise blob matches into trajectories.
@@ -79,22 +80,22 @@ class BlobStitcher:
 
     def get_track_list(self,match_list):
         """
-        Returns list of all tracks. 
+        Returns list of all tracks.
         """
         track_list = []
         self.match_list_working = copy.deepcopy(match_list)
-        for index in range(len(self.match_list_working)-1): 
+        for index in range(len(self.match_list_working)-1):
             frame_pair = self.match_list_working[index]['frame_pair']
             for blob_pair in self.match_list_working[index]['blob_pair_list']:
-                track = self.get_track(frame_pair, blob_pair,index+1) 
+                track = self.get_track(frame_pair, blob_pair,index+1)
                 track_list.append(track)
         self.match_list_working = []
         return track_list
 
     def get_track(self, frame_pair, blob_pair, index):
         """
-        Returns track for given frame_pair, blob_pair found by search forward through the 
-        working list of all blob pair matches until no more matches are found. Blob pairs are 
+        Returns track for given frame_pair, blob_pair found by search forward through the
+        working list of all blob pair matches until no more matches are found. Blob pairs are
         removed from the working list of pair matches as they are added to tracks.
         """
         track = [{'frame': frame_pair[0], 'blob': blob_pair[0]}]
@@ -116,10 +117,10 @@ class TrackVideoCreator:
         self.video_file = video_file
         self.track_list = track_list
         self.param = {
-                'circle_radius_margin': 5, 
+                'circle_radius_margin': 5,
                 'circle_radius_min': 8,
                 'point_radius': 2
-                } 
+                }
 
     def run(self):
 
@@ -139,7 +140,7 @@ class TrackVideoCreator:
             ret, frame = cap.read()
             if not ret:
                 break
-            
+
             tracks_in_frame = frame_to_tracks_dict[frame_number]
 
             if tracks_in_frame:
@@ -205,7 +206,7 @@ class TrackVideoCreator:
         for i in range(start_frame):
             frame_to_tracks_dict[i] = []
 
-        # Loop over frames and add all tracks which contains frame to list for 
+        # Loop over frames and add all tracks which contains frame to list for
         # that frame.
         for i in range(start_frame, end_frame+1):
             frame_to_tracks_dict[i] = []
@@ -237,8 +238,8 @@ class TrackVideoCreator:
         cv2.circle(frame, (x1, y1), self.param['point_radius'], (0,0,255))
 
 
-def filter_outlying_segments(track_list, multiplier=1, use_mad=False, filter_floor_pix=50):
-    
+def filter_outlying_segments(track_list, multiplier=2, use_mad=False, use_std = False, angle_diff = numpy.pi/4, filter_floor_pix=50):
+
     new_track_list = []
     change_flag_list = []
 
@@ -262,22 +263,33 @@ def filter_outlying_segments(track_list, multiplier=1, use_mad=False, filter_flo
         diff_y = numpy.array(numpy.diff(y_vals))
 
         step_array = (numpy.sqrt(diff_x**2 + diff_y**2))
-        
+
         if use_mad:
             intrapair_mad = get_mad(step_array)
             intrapair_median = numpy.median(step_array)
-        else:
+        if use_std:
             intrapair_step_sigma = numpy.std(step_array)
             intrapair_step_mean = numpy.mean(step_array)
+        else:
+            angle_array = numpy.unwrap(numpy.arctan2(diff_y, diff_x))
+            #delta_angle_array = numpy.diff(angle_array)rad()
+            #accel_array = numpy.diff(step_array)
 
-        for index, value in enumerate(step_array):
+        #for index, current_step_size in enumerate(step_array):
+        for index in range(1,len(step_array)):
+            current_step_size = step_array[index]
             if use_mad:
-                if numpy.abs(value - intrapair_median) > max(intrapair_mad*multiplier, filter_floor_pix):
+                if numpy.abs(current_step_size - intrapair_median) > max(intrapair_mad*multiplier, filter_floor_pix):
                     flagged_indices.append(index+1)
-            else:
-                if numpy.abs(value - intrapair_step_mean) > max(intrapair_step_sigma*multiplier,filter_floor_pix):
+            if use_std:
+                if numpy.abs(current_step_size - intrapair_step_mean) > max(intrapair_step_sigma*multiplier,filter_floor_pix):
                     flagged_indices.append(index+1)
                     print('i: {0}, avg: {1:1.2f}, std: {2:1.2f}, max: {3:1.2f}, {4}'.format(i,intrapair_step_mean, intrapair_step_sigma, step_array.max(), len(track)))
+            else: #relative to last segment, is this segment uncharacteristically sized OR angled?
+                if 1.0/multiplier > numpy.abs(float(current_step_size)/step_array[index-1]) or numpy.abs(float(current_step_size)/step_array[index-1]) > multiplier:
+                    flagged_indices.append(index+1)
+                elif numpy.abs(angle_array[index]-angle_array[index-1]) > angle_diff*numpy.pi/180:
+                    flagged_indices.append(index+1)
 
         if len(flagged_indices) == 0:
             change_flag_list.append(False)
@@ -285,10 +297,9 @@ def filter_outlying_segments(track_list, multiplier=1, use_mad=False, filter_flo
             continue
 
         debug_track_list.append(track)
-    
+
         flagged_indices.insert(0,0)
         flagged_indices.append(len(track))
-
 
         for n, m in zip(flagged_indices[:-1], flagged_indices[1:]):
             new_track = track[n:m]
@@ -297,9 +308,58 @@ def filter_outlying_segments(track_list, multiplier=1, use_mad=False, filter_flo
                 change_flag_list.append(True)
 
     return new_track_list, change_flag_list, debug_track_list
-        
 
+def join_tracks(track_list,gap_multiplier = 0.5,max_tracks_to_join = 4):
+    new_track_list = []
+    m = max_tracks_to_join
+    number_of_tracks_added = 0
+    print (len(track_list))
+    for index in range(len(track_list)-m-1):
+        index = index +number_of_tracks_added
+        growing_track = track_list[index]
+        number_of_tracks_added = 0
+        for indices_ahead in [int(x) for x in numpy.linspace(1,m,m)]:
+            tail_to_consider = track_list[index+indices_ahead]
+            current_head = track_list[index+indices_ahead -1]
+            frame_gap = tail_to_consider[0]['frame'] - current_head[-1]['frame']
+            if  3 > frame_gap > 0: #if the adjacent tracks are 1 or 2 frames apart
+                #write code in here to determine whether they should be joined or not; conditional on how many frames apart they are
+                head_diffx  = current_head[-1]['blob']['centroid_x']-current_head[-2]['blob']['centroid_x']
+                head_diffy  = current_head[-1]['blob']['centroid_y']-current_head[-2]['blob']['centroid_y']
+                tail_diffx  = tail_to_consider[1]['blob']['centroid_x']-tail_to_consider[0]['blob']['centroid_x']
+                tail_diffy  = tail_to_consider[1]['blob']['centroid_y']-tail_to_consider[0]['blob']['centroid_y']
 
+                max_gap_to_bridge = gap_multiplier*(numpy.sqrt(head_diffx**2+head_diffy**2) + numpy.sqrt(tail_diffx**2 + tail_diffy**2))/2
+
+                head_projection = [current_head[-1]['blob']['centroid_x']+head_diffx, current_head[-1]['blob']['centroid_y']+head_diffy ]
+                tail_projection = [tail_to_consider[0]['blob']['centroid_x']-tail_diffx, tail_to_consider[0]['blob']['centroid_y']-tail_diffy]
+                if frame_gap == 2: # this means there's a single intervening frame to bridge
+                    if numpy.sqrt((head_projection[0]-tail_projection[0])**2 + (head_projection[1]-tail_projection[1])**2) < max_gap_to_bridge:
+                        #print ('joining tracks between '+str(current_head[-1]['frame'])+' and '+str(tail_to_consider[0]['frame']))
+                        growing_track = growing_track+tail_to_consider
+                        print ([x['frame']for x in growing_track])
+                        number_of_tracks_added += 1
+                        continue #keep considering growing the track
+                    else:
+                        #stop growing the track, add it to new_track_list,
+                        new_track_list.append(growing_track)
+                        break
+                elif frame_gap == 1: # this means there's no frame to bridge
+                    if numpy.sqrt((head_projection[0]-tail_to_consider[0]['blob']['centroid_x'])**2 + (head_projection[1]-tail_to_consider[0]['blob']['centroid_y'])**2) < max_gap_to_bridge:
+                        #print ('joining tracks between '+str(current_head[-1]['frame'])+' and '+str(tail_to_consider[0]['frame']))
+                        growing_track = growing_track+tail_to_consider
+                        print ([x['frame']for x in growing_track])
+                        number_of_tracks_added += 1
+                        continue #keep considering growing the track
+                    else:
+                        new_track_list.append(growing_track)
+                        break
+            else: #if the
+                new_track_list.append(growing_track)
+                break
+        print ('.')
+
+    return new_track_list
 # Utility functions
 # ------------------------------------------------------------------------------
 
@@ -314,9 +374,3 @@ def blob_distance(blob_0, blob_1):
     x0, y0 = blob_position(blob_0)
     x1, y1 = blob_position(blob_1)
     return math.sqrt((x0-x1)**2 + (y0-y1)**2)
-
-
-
-
-
-

@@ -1,6 +1,7 @@
 from __future__ import print_function
 import sys
 import cv2
+#import cv
 import json
 import numpy as np
 
@@ -20,7 +21,7 @@ class SkyTracker:
             'open_kernel_size': (3,3),
             'close_kernel_size': (3,3),
             'kernel_shape': 'ellipse',
-            'output_video_name': 'tracking_video.mp4',
+            'output_video_name': 'tracking_video.avi',
             'output_video_fps': 20.0,
             'blob_file_name': 'blob_data.json',
             'show_dev_images' : False,
@@ -90,6 +91,12 @@ class SkyTracker:
                         self.param['output_video_fps'],
                         (frame.shape[1], frame.shape[0]),
                         )
+                #vid = cv2.VideoWriter(
+                #        self.param['output_video_name'],
+		#	cv.FOURCC('X','V','I','D'),
+                #        self.param['output_video_fps'],
+                #        (frame.shape[1], frame.shape[0]),
+                #        )
 
 
             # Update background model 
