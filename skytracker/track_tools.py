@@ -312,18 +312,16 @@ def filter_outlying_segments(track_list, multiplier=2, use_mad=False, use_std = 
 def join_tracks(track_list,gap_multiplier = 0.5,max_tracks_to_join = 4):
     new_track_list = []
     m = max_tracks_to_join
-    number_of_tracks_added = 0
-    print (len(track_list))
-    for index in range(len(track_list)-m-1):
-        index = index +number_of_tracks_added
+    index = 0
+    # if len(track_list) < m:
+    #     new_track_list = track_list
+    while len(track_list)> m:
         growing_track = track_list[index]
-        number_of_tracks_added = 0
         for indices_ahead in [int(x) for x in numpy.linspace(1,m,m)]:
             tail_to_consider = track_list[index+indices_ahead]
             current_head = track_list[index+indices_ahead -1]
             frame_gap = tail_to_consider[0]['frame'] - current_head[-1]['frame']
             if  3 > frame_gap > 0: #if the adjacent tracks are 1 or 2 frames apart
-                #write code in here to determine whether they should be joined or not; conditional on how many frames apart they are
                 head_diffx  = current_head[-1]['blob']['centroid_x']-current_head[-2]['blob']['centroid_x']
                 head_diffy  = current_head[-1]['blob']['centroid_y']-current_head[-2]['blob']['centroid_y']
                 tail_diffx  = tail_to_consider[1]['blob']['centroid_x']-tail_to_consider[0]['blob']['centroid_x']
@@ -335,31 +333,83 @@ def join_tracks(track_list,gap_multiplier = 0.5,max_tracks_to_join = 4):
                 tail_projection = [tail_to_consider[0]['blob']['centroid_x']-tail_diffx, tail_to_consider[0]['blob']['centroid_y']-tail_diffy]
                 if frame_gap == 2: # this means there's a single intervening frame to bridge
                     if numpy.sqrt((head_projection[0]-tail_projection[0])**2 + (head_projection[1]-tail_projection[1])**2) < max_gap_to_bridge:
-                        #print ('joining tracks between '+str(current_head[-1]['frame'])+' and '+str(tail_to_consider[0]['frame']))
                         growing_track = growing_track+tail_to_consider
-                        print ([x['frame']for x in growing_track])
-                        number_of_tracks_added += 1
                         continue #keep considering growing the track
                     else:
-                        #stop growing the track, add it to new_track_list,
-                        new_track_list.append(growing_track)
                         break
                 elif frame_gap == 1: # this means there's no frame to bridge
                     if numpy.sqrt((head_projection[0]-tail_to_consider[0]['blob']['centroid_x'])**2 + (head_projection[1]-tail_to_consider[0]['blob']['centroid_y'])**2) < max_gap_to_bridge:
-                        #print ('joining tracks between '+str(current_head[-1]['frame'])+' and '+str(tail_to_consider[0]['frame']))
                         growing_track = growing_track+tail_to_consider
-                        print ([x['frame']for x in growing_track])
-                        number_of_tracks_added += 1
                         continue #keep considering growing the track
                     else:
-                        new_track_list.append(growing_track)
                         break
-            else: #if the
-                new_track_list.append(growing_track)
+            else:
                 break
-        print ('.')
-
+        new_track_list.append(growing_track)
+        del track_list[index:index+indices_ahead]
+    new_track_list+= track_list[-m:] #adds the last few tracks that weren't subject to this splicing
     return new_track_list
+
+# the version of join_tracks below is possibly not yet working; tries to take into account local curvature of tracks
+# def join_tracks(track_list,gap_multiplier = 0.5,max_tracks_to_join = 4):
+#     new_track_list = []
+#     m = max_tracks_to_join
+#     index = 0
+#     while len(track_list)> m:
+#         growing_track = track_list[index]
+#         for indices_ahead in [int(x) for x in numpy.linspace(1,m,m)]:
+#             tail_to_consider = track_list[index+indices_ahead]
+#             current_head = track_list[index+indices_ahead -1]
+#             frame_gap = tail_to_consider[0]['frame'] - current_head[-1]['frame']
+#             if  3 > frame_gap > 0: #if the adjacent tracks are 1 or 2 frames apart
+#                 head_diffx  = current_head[-1]['blob']['centroid_x']-current_head[-2]['blob']['centroid_x']
+#                 head_diffy  = current_head[-1]['blob']['centroid_y']-current_head[-2]['blob']['centroid_y']
+#                 tail_diffx  = tail_to_consider[1]['blob']['centroid_x']-tail_to_consider[0]['blob']['centroid_x']
+#                 tail_diffy  = tail_to_consider[1]['blob']['centroid_y']-tail_to_consider[0]['blob']['centroid_y']
+#                 #
+#                 # head_last_ang = numpy.unwrap(numpy.arctan2(head_diffy, head_diffx))
+#                 # tail_last_ang = numpy.unwrap(numpy.arctan2(head_diffy, head_diffx))
+#                 head_positions = numpy.array([[x['blob']['centroid_x']for x in current_head],[y['blob']['centroid_y']for y in current_head]]).T
+#                 tail_positions = numpy.array([[x['blob']['centroid_x']for x in tail_to_consider],[y['blob']['centroid_y']for y in tail_to_consider]]).T
+#                 head_angles = numpy.unwrap([numpy.arctan2(a[1],a[0]) for a in head_positions])
+#                 print (head_angles)
+#                 tail_angles = numpy.unwrap([numpy.arctan2(a[1],a[0]) for a in tail_positions])
+#                 head_ang_vel = numpy.diff(head_angles)
+#                 tail_ang_vel = numpy.diff(tail_angles)
+#
+#                 max_gap_to_bridge = gap_multiplier*(numpy.sqrt(head_diffx**2+head_diffy**2) + numpy.sqrt(tail_diffx**2 + tail_diffy**2))/2
+#
+#                 head_projection_x = head_positions[-1][0] +    (numpy.cos(head_angles[-1] + head_ang_vel[-1])) * numpy.sqrt(head_diffx**2+head_diffy**2)
+#                 head_projection_y = head_positions[-1][1] +    (numpy.sin(head_angles[-1] + head_ang_vel[-1])) * numpy.sqrt(head_diffx**2+head_diffy**2)
+#                 head_projection = [head_projection_x, head_projection_y]
+#
+#                 tail_projection_x = tail_positions[0][0]  -    (numpy.cos(tail_angles [0] - tail_ang_vel[0]))  * numpy.sqrt(tail_diffx**2+tail_diffy**2)
+#                 tail_projection_y = tail_positions[0][1]  -    (numpy.sin(tail_angles [0] - tail_ang_vel[0]))  * numpy.sqrt(tail_diffx**2+tail_diffy**2)
+#                 tail_projection = [tail_projection_x, tail_projection_y]
+#
+#                 # head_projection = [current_head[-1]['blob']['centroid_x']+head_diffx, current_head[-1]['blob']['centroid_y']+head_diffy ]
+#                 # tail_projection = [tail_to_consider[0]['blob']['centroid_x']-tail_diffx, tail_to_consider[0]['blob']['centroid_y']-tail_diffy]
+#                 if frame_gap == 2: # this means there's a single intervening frame to bridge
+#                     if numpy.sqrt((head_projection[0]-tail_projection[0])**2 + (head_projection[1]-tail_projection[1])**2) < max_gap_to_bridge:
+#                         growing_track = growing_track+tail_to_consider
+#                         continue #keep considering growing the track
+#                     else:
+#                         break
+#                 elif frame_gap == 1: # this means there's no frame to bridge
+#                     if numpy.sqrt((head_projection[0]-tail_to_consider[0]['blob']['centroid_x'])**2 + (head_projection[1]-tail_to_consider[0]['blob']['centroid_y'])**2) < max_gap_to_bridge:
+#                         growing_track = growing_track+tail_to_consider
+#                         continue #keep considering growing the track
+#                     else:
+#                         break
+#             else:
+#                 break
+#         new_track_list.append(growing_track)
+#         del track_list[index:index+indices_ahead]
+#
+#     return new_track_list
+
+
+
 # Utility functions
 # ------------------------------------------------------------------------------
 
