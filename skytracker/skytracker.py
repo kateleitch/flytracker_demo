@@ -8,17 +8,7 @@ import numpy as np
 from median_background import MedianBackground
 from blob_finder import BlobFinder
 
-### KJL 2018_04_18 #### trying to integrate de_fisheye with this workflow
-from defisheye import DeFisheye # now need to make a difisheye.py script in this folder wiht a DeFisheye class in it
-
-
-# DIM=(2592, 1944)
-# K=np.array([[1262.179277672335, 0.0, 1275.466404337509], [0.0, 1261.8632092942269, 1001.5137484034931], [0.0, 0.0, 1.0]])
-# D=np.array([[-0.03450569015228284], [0.003778400552623656], [-0.016075235821126792], [0.009150051563118222]])
-# ########################
-
 class SkyTracker:
-
     default_param = {
             'bg_window_size': 11,
             'fg_threshold': 10,
@@ -32,15 +22,10 @@ class SkyTracker:
             'output_video_fps': 20.0,
             'blob_file_name': 'blob_data.json',
             'show_dev_images' : False,
-            'min_interblob_spacing' : 2,
-            'perform_calibration':True,
-            'calibration_checkerboard_internal_corners': (6,9),
-            'defisheye_balance' : 1.0}
+            'min_interblob_spacing' : 2}
 
-    def __init__(self, input_video_name, checkerboard_video_name, param=default_param):
+    def __init__(self, input_video_name, param=default_param):
         self.input_video_name = input_video_name
-        #KJL 2018_04_19
-        self.checkerboard_video_name = checkerboard_video_name
         self.param = self.default_param
         if param is not None:
             self.param.update(param)
@@ -57,8 +42,6 @@ class SkyTracker:
     def run(self):
 
         cap = cv2.VideoCapture(self.input_video_name)
-        # KJL 2018_04_19
-
 
         bg_model = MedianBackground(
                 window_size=self.param['bg_window_size'],
@@ -72,15 +55,7 @@ class SkyTracker:
                 open_kernel_size = self.param['open_kernel_size'],
                 close_kernel_size = self.param['close_kernel_size'],
                 kernel_shape = self.param['kernel_shape'],
-		#---------KJL 2017_12_15
                 min_interblob_spacing = self.param['min_interblob_spacing'])
-
-        # KJL 2018_04_19
-        if self.param['perform_calibration']:
-            defisheye = DeFisheye(checkerboard_num_of_internal_corners = self.param['calibration_checkerboard_internal_corners'],
-                                balance = self.param['defisheye_balance'] )
-        #Here I'm running the fisheye calibration on the checkerboard video for this camera
-            calib_dim, K, D = defisheye.calibrate(checkerboard_video_name = self.checkerboard_video_name)
 
         # Output files
         vid = None
@@ -92,37 +67,26 @@ class SkyTracker:
         frame_count = -1
 
         while True:
-
             print('frame count: {0}'.format(frame_count))
-
             # Get frame, mask and convert to gray scale
             ret, frame = cap.read()
             if not ret:
                 break
             frame_count += 1
-
-            frame = self.apply_datetime_mask(frame)
-            ##### HERE IS WHERE I THINK defisheye.undistort COULD BE CALLED, ON A FRAME-BY-FRAME BASIS ####
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            if self.param['perform_calibration']:
-                frame = defisheye.undistort(img = frame, DIM = calib_dim, K = K, D = D)
-
-            #############################################################
-
             if frame_count == 0 and self.param['output_video_name'] is not None:
                 vid = cv2.VideoWriter(
                         self.param['output_video_name'],
-                        0x00000021,    # hack for cv2.VideoWriter_fourcc(*'MP4V')
+                        0x00000021,    # hack for cv.VideoWriter_fourcc(*'MP4V')
                         self.param['output_video_fps'],
                         (frame.shape[1], frame.shape[0]),
                         )
                 #vid = cv2.VideoWriter(
                 #        self.param['output_video_name'],
-		#	cv.FOURCC('X','V','I','D'),
+		        #        cv2.FOURCC('X','V','I','D'),
                 #        self.param['output_video_fps'],
                 #        (frame.shape[1], frame.shape[0]),
                 #        )
-
 
             # Update background model
             bg_model.update(frame)
@@ -153,7 +117,6 @@ class SkyTracker:
             wait_key_val = cv2.waitKey(1) & 0xFF
             if wait_key_val == ord('q'):
                 break
-
         # Clean up
         cap.release()
         cv2.destroyAllWindows()
@@ -163,8 +126,6 @@ class SkyTracker:
 
         if blob_fid is not None:
             blob_fid.close()
-
-
 
 # ---------------------------------------------------------------------------------------
 

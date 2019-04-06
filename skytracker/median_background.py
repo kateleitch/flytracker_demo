@@ -20,7 +20,7 @@ class MedianBackground:
         self.background = np.median(frame_array,axis=0)
         self.background = np.array(self.background,dtype=np.uint8)
 
-        # Get foreground  
+        # Get foreground
         diff_frame = cv2.absdiff(frame,self.background)
         # NOTE: replace 255 with max value form dtype
         ret, self.foreground_mask = cv2.threshold(diff_frame, self.threshold, np.iinfo(frame.dtype).max, cv2.THRESH_BINARY)
@@ -30,7 +30,5 @@ class MedianBackground:
         self.ready = False
         self.foreground_mask = None
         self.foreground = None
-        self.background = None 
+        self.background = None
         self.frame_list = []
-
-
