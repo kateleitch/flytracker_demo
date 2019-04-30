@@ -1,0 +1,3 @@
+#!/home/kate/.virtualenvs/sky/bin/python
+import skytracker
+skytracker.app_main()
