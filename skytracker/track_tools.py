@@ -106,7 +106,9 @@ class BlobStitcher:
 
 class TrackVideoCreator:
 
-    def __init__(self, video_file, track_list, shall_we_perform_ground_truthing, track_metadata_filename,existing_track_metadata_json):
+    # def __init__(self, video_file, track_list, shall_we_perform_ground_truthing, track_metadata_filename,existing_track_metadata_json):
+    def __init__(self, video_file, track_list, track_metadata_filename,existing_track_metadata_json):
+
         self.video_file = video_file
         self.track_list = track_list
 
@@ -120,9 +122,10 @@ class TrackVideoCreator:
             else:
                 return data
 
-        self.ground_truthing_annotation = shall_we_perform_ground_truthing
+        # self.ground_truthing_annotation = shall_we_perform_ground_truthing # <-- HMMM THIS IS NOT REFERENCED AGAIN
         self.track_metadata_filename = track_metadata_filename
         self.track_metadata_dict = {track_index:{} for track_index in range(len(self.track_list))}
+
         if existing_track_metadata_json != 'False':
             print (existing_track_metadata_json)
             d = load_blob_data(existing_track_metadata_json) # reads in existing metadata as a list.
@@ -155,6 +158,7 @@ class TrackVideoCreator:
 
         self.cap = cv2.VideoCapture(self.video_file)
         self.number_of_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print ('number of frames: ' +str(self.number_of_frames))
 
         self.start_frame = self.track_list[0][0]['frame']
         self.frame_to_tracks_dict, self.frame_to_tracks_index_dict = self.get_frame_to_tracks_dict(self.start_frame, self.number_of_frames-1)
@@ -179,6 +183,7 @@ class TrackVideoCreator:
     def run(self):
 
         frame_number = self.start_frame
+        print ('starting frame number:' +str(frame_number))
 
         cv2.namedWindow("frame")
         cv2.setMouseCallback("frame", self.on_mouse_event)
